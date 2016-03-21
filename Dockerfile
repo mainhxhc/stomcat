@@ -1,34 +1,41 @@
-# VERSION 0.0.1
-# 默认ubuntu server长期支持版本，当前是12.04
-FROM ubuntu
-# 签名啦
-MAINTAINER yongboy "123@qq.com"
+FROM java:7-jre
 
-# 更新源，安装ssh server
-RUN echo "deb http://archive.ubuntu.com/ubuntu precise main universe"> /etc/apt/sources.list
-RUN apt-get update
-RUN apt-get install -y openssh-server
-RUN mkdir -p /var/run/sshd
+ENV CATALINA_HOME /usr/local/tomcat
+ENV PATH $CATALINA_HOME/bin:$PATH
+RUN mkdir -p "$CATALINA_HOME"
+WORKDIR $CATALINA_HOME
 
-# 设置root ssh远程登录密码为123456
-RUN echo "root:123123" | chpasswd 
+# see https://www.apache.org/dist/tomcat/tomcat-8/KEYS
+RUN set -ex \
+	&& for key in \
+		05AB33110949707C93A279E3D3EFE6B686867BA6 \
+		07E48665A34DCAFAE522E5E6266191C37C037D42 \
+		47309207D818FFD8DCD3F83F1931D684307A10A5 \
+		541FBE7D8F78B25E055DDEE13C370389288584E7 \
+		61B832AC2F1C5A90F0F9B00A1C506407564C17A3 \
+		713DA88BE50911535FE716F5208B0AB1D63011C7 \
+		79F7026C690BAA50B92CD8B66A3AD3F4F22C4FED \
+		9BA44C2621385CB966EBA586F72C284D731FABEE \
+		A27677289986DB50844682F8ACB77FC2E86E29AC \
+		A9C5DF4D22E99998D9875A5110C01C5A2F6059E7 \
+		DCFD35E0BF8CA7344752DE8B6FB21E8933C60243 \
+		F3A04C595DB5B6A5F1ECA43E3B7BBB100D811BBE \
+		F7DA48BB64BCB84ECBA7EE6935CD23C10D498E23 \
+	; do \
+		gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$key"; \
+	done
 
-# 添加orache java7源，一次性安装vim，wget，curl，java7，tomcat7等必备软件
-RUN apt-get install python-software-properties
-RUN add-apt-repository ppa:webupd8team/java
-RUN apt-get update
-RUN apt-get install -y vim wget curl oracle-java7-installer tomcat7
+ENV TOMCAT_MAJOR 7
+ENV TOMCAT_VERSION 7.0.68
+ENV TOMCAT_TGZ_URL https://www.apache.org/dist/tomcat/tomcat-$TOMCAT_MAJOR/v$TOMCAT_VERSION/bin/apache-tomcat-$TOMCAT_VERSION.tar.gz
 
-# 设置JAVA_HOME环境变量
-RUN update-alternatives --display java
-RUN echo "JAVA_HOME=/usr/lib/jvm/java-7-oracle">> /etc/environment
-RUN echo "JAVA_HOME=/usr/lib/jvm/java-7-oracle">> /etc/default/tomcat7
+RUN set -x \
+	&& curl -fSL "$TOMCAT_TGZ_URL" -o tomcat.tar.gz \
+	&& curl -fSL "$TOMCAT_TGZ_URL.asc" -o tomcat.tar.gz.asc \
+	&& gpg --batch --verify tomcat.tar.gz.asc tomcat.tar.gz \
+	&& tar -xvf tomcat.tar.gz --strip-components=1 \
+	&& rm bin/*.bat \
+	&& rm tomcat.tar.gz*
 
-# 容器需要开放SSH 22端口
-EXPOSE 22
-
-# 容器需要开放Tomcat 8080端口
 EXPOSE 8080
-
-# 设置Tomcat7初始化运行，SSH终端服务器作为后台运行
-ENTRYPOINT service tomcat7 start && /usr/sbin/sshd -D
+CMD ["catalina.sh", "run"]
